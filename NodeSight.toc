@@ -32,4 +32,5 @@ WhatsNew.lua
 Setup.lua
 Recorder.lua
 Spots.lua
+Faint.lua
 Settings.lua

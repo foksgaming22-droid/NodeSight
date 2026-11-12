@@ -74,6 +74,8 @@ local defaults = {
     lootWait = true, -- the timer and Scan by distance wait a moment after a fight, for looting
     lootSeconds = 3, -- how long
     edgeScan = false, -- Beta: scans while moving read only the part of the minimap new since the last scan
+    faintSpots = false, -- Beta: see-through symbols on the spots where nodes were found before (Faint.lua)
+    faintAlpha = 80, -- how solid they are, in percent
     trailFrames = true, -- Beta: frames other addons place where the minimap is hidden during a scan too (Trailing)
     scanPreset = 1, -- the Scanning page's preset: worked out from the settings it sets
     minimapShape = 1, -- 1 automatic (asks your UI addon), 2 round, 3 square
@@ -4013,6 +4015,9 @@ for i, sound in ipairs(FIND_SOUNDS) do ns.FIND_SOUND_NAMES[i] = sound[1] end
 ns.Clean, ns.MapPosition, ns.PlayerFacing = Clean, MapPosition, PlayerFacing
 ns.UpdateScanner, ns.ApplyDotScale, ns.ApplyArrowLock = UpdateScanner, ApplyDotScale, ApplyArrowLock
 ns.ApplyArrowSize = ApplyArrowSize
+ns.IconOf, ns.CIRCLE = IconOf, CIRCLE
+-- The symbols' frame (a getter: it's made when the settings load).
+function ns.MapFrame() return mapFrame end
 ns.turns, ns.SWITCH_WAIT, ns.Finders = turns, SWITCH_WAIT, Finders
 -- A getter, since each scan replaces the list.
 function ns.Markers() return markers end

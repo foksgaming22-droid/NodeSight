@@ -1,7 +1,7 @@
 -- NodeSight's spots: where herbs, ore and chests were found, remembered for good
 -- (NodeSightDB.spots, shared by your characters). Herbs and ore grow back in the same
--- places, so every scan teaches NodeSight a little more of each zone. Nothing uses the
--- spots yet: they are only collected here.
+-- places, so every scan teaches NodeSight a little more of each zone. Faint.lua shows
+-- them as faint symbols.
 --
 -- A spot: { x, y (0-1 on its map), kind, names = { [name] = times seen }, seen, empty
 -- (times a whole scan looked there and found nothing), at (the server's time it was last
@@ -45,6 +45,11 @@ local function Nearest(list, kind, x, y, width, height)
     return best
 end
 
+-- When a whole scan last found a spot empty (the game's clock, this session only); nil once
+-- it's seen again.
+local emptyAt = {}
+function ns.SpotEmptyAt(spot) return emptyAt[spot] end
+
 -- For other files: a map's spots, or nil.
 function ns.Spots(map)
     local all = type(NodeSightDB) == "table" and NodeSightDB.spots
@@ -83,6 +88,7 @@ local function Record()
                         end
                     end
                     touched[spot] = true
+                    emptyAt[spot] = nil
                     if spot.seen == 0 or now - spot.at >= AGAIN then
                         spot.seen, spot.at = spot.seen + 1, now
                         spot.names[marker.name] = (spot.names[marker.name] or 0) + 1
@@ -102,9 +108,12 @@ local function Record()
     if not list or not width or not height then return end
     local reach = (last.radius * INSIDE) ^ 2
     for _, spot in ipairs(list) do
-        if spot.kind == finder and not touched[spot] and not spot.cave and now - spot.at >= AGAIN then
+        if spot.kind == finder and not touched[spot] and not spot.cave then
             local dx, dy = (spot.x - last.x) * width, (spot.y - last.y) * height
-            if dx * dx + dy * dy <= reach then spot.empty, spot.at = spot.empty + 1, now end
+            if dx * dx + dy * dy <= reach then
+                emptyAt[spot] = GetTime()
+                if now - spot.at >= AGAIN then spot.empty, spot.at = spot.empty + 1, now end
+            end
         end
     end
 end

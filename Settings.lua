@@ -680,6 +680,16 @@ local function RegisterSettings()
         "While you move, scans read only the part of the minimap that's new since the last scan, so they take less time. "
             .. "Every third scan, and any scan while you stand still, reads all of it.",
         UpdateScanner)
+    local _, faint = Checkbox("faintSpots", "Faint symbols on known spots (Beta)",
+        "NodeSight remembers where herbs, ore and chests were found. With this on, those spots show as see-through symbols without a ring, "
+            .. "with no scan at all: something grows there at times, not something is there now. A scan that finds it shows the normal symbol. "
+            .. "The more often a spot was empty, the fainter it is. Only for what you're tracking; the arrow never points at one. Needs Herb and ore symbols.",
+        function() ns.RefreshFaint() Redraw() end)
+    local _, faintRow = Slider("faintAlpha", "Faint symbols' opacity", 20, 100,
+        "How solid the faint symbols are, in percent. A spot a scan just found empty, or one that is often empty, shows a little fainter than this. "
+            .. "The default is " .. defaults.faintAlpha .. ".",
+        function() ns.RefreshFaint() end, 5)
+    Indent(faintRow, faint, function() return ns.db.faintSpots end)
     local farNote = "Far away sparkles don't work as well since WoW Forever's latest update: whether a far herb is above or below you can't be read any more."
     Header(RED_FONT_COLOR:WrapTextInColorCode("Far away sparkles don't work as well now"), farNote)
     local _, far = Checkbox("worldMark", "Far away sparkles (Beta)",
