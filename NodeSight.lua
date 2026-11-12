@@ -4028,6 +4028,8 @@ NodeSightAPI = {
     end,
 }
 function ns.KeyLastJobs() return key.lastJobs, key.lastSkipped, key.lastSpots end
+-- Where the last scan began (map, x, y, radius, facing) and whether it was an edge scan (Spots.lua).
+function ns.KeyLast() return key.last, key.edge end
 
 local MINIMAP_TOOLTIP = Enum.TooltipDataType.MinimapMouseover -- the minimap dots' tooltip type
 local OBJECT_TOOLTIP = Enum.TooltipDataType.Object -- a herb's or ore's own tooltip
@@ -4037,7 +4039,7 @@ local OBJECT_TOOLTIP = Enum.TooltipDataType.Object -- a herb's or ore's own tool
 -- back are always shared.
 local function LoadSettings()
     NodeSightDB = NodeSightDB or {}
-    local SHARED = { learned = true, questObjects = true, saved = true, applied = true, rareNames = true, report = true, sessions = true }
+    local SHARED = { learned = true, questObjects = true, saved = true, applied = true, rareNames = true, report = true, sessions = true, spots = true }
     if type(NodeSightCharDB) ~= "table" then
         NodeSightCharDB = { own = true }
         for key, value in pairs(NodeSightDB) do

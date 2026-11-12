@@ -31,4 +31,5 @@ SparkleWindow.lua
 WhatsNew.lua
 Setup.lua
 Recorder.lua
+Spots.lua
 Settings.lua
