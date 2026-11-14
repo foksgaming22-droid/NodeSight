@@ -265,18 +265,22 @@ local function RegisterSettings()
     -- Collecting: on or off, the world map's marks, and a button to forget it all.
     Page("Collecting")
     local collectRow = select(2, Checkbox("collect", "Remember where I gather",
-        "Remembers where you gather herbs and ore, on this computer only. Nothing is sent to other players. "
-            .. "Off: nothing new is remembered and the world map shows no marks; what was remembered is kept.",
+        "Remembers where you gather herbs and ore. "
+            .. "Off: nothing new is remembered, shared or received, and the world map shows no marks; what was remembered is kept.",
         function() ns.UpdateCollect() Redraw() end))
     local function CollectOn() return ns.db.collect end
     Indent(select(2, Checkbox("collectMap", "Show the places on the world map",
         "A small herb or ore icon on the world map for each place you gathered at. Put your mouse on one to see what it was.",
         function() ns.RefreshNodePins() end)), collectRow, CollectOn)
+    Indent(select(2, Checkbox("share", "Share places with other NodeSight players",
+        "Passes the places you remembered on to other players with NodeSight, and takes theirs, over a hidden addon channel. "
+            .. "Only the map, the herb or ore and the place are sent; nothing shows in chat. Places from others are a little see-through on the map.",
+        function() ns.UpdateShare() end)), collectRow, CollectOn)
     -- Forgetting needs a second click within a few seconds.
     local FORGET_WAIT = 10
     local forgetAsked = 0
     layout:AddInitializer(CreateSettingsButtonInitializer("Remembered places", "Forget all", function()
-        local count = ns.NodeCount()
+        local count = ns.NodeCount() + ns.NodeCount(true)
         if count == 0 then
             ns.CollectSay("No places are remembered.")
         elseif GetTime() - forgetAsked <= FORGET_WAIT then
@@ -286,7 +290,13 @@ local function RegisterSettings()
             forgetAsked = GetTime()
             ns.CollectSay(("%d places are remembered. Click Forget all again within %d seconds to forget them."):format(count, FORGET_WAIT))
         end
-    end, "Forgets every place NodeSight remembered, for all your characters. The first click says how many there are; a second click forgets them.", false))
+    end, "Forgets every place NodeSight remembered, your own and the ones from other players, for all your characters. The first click says how many there are; a second click forgets them.", false))
+    layout:AddInitializer(CreateSettingsButtonInitializer("Sharing", "Status", function()
+        ns.CollectSay(ns.ShareStatus())
+    end, "Says in chat how sharing is doing: whether the channel is joined, and how many messages went out and came in.", false))
+    layout:AddInitializer(CreateSettingsButtonInitializer("Places from other players", "Forget those", function()
+        ns.CollectSay(("Forgot %d places from other players."):format(ns.ForgetNodes(true)))
+    end, "Forgets the places other players sent you, and keeps your own.", false))
 
     -- The sparkles' settings are all in their own window, which opens with this page.
     -- A controller can't reach that window, and its color picker and menus would run

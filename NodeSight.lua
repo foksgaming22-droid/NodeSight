@@ -15,6 +15,7 @@
 --   Switch.lua       the finder switch: when to switch, whether it worked, and the mute of its click
 --   Sparkles.lua     sparkles on the herb or ore in front of you
 --   Collect.lua      remembers where you gathered, and marks the places on the world map
+--   Share.lua        passes those places on to other NodeSight players, and takes theirs
 --   SparkleWindow.lua the sparkle window: on/off and the look for each kind, with a 3D preview
 --   WhatsNew.lua     the patch notes dialog
 --   MinimapButton.lua the minimap button
@@ -75,6 +76,7 @@ local defaults = {
     minimapButton = true, -- the minimap button (its place: minimapIcon, LibDBIcon's)
     collect = true, -- remember where you gather herbs and ore (Collect.lua)
     collectMap = true, -- mark the remembered places on the world map
+    share = true, -- pass the remembered places on to other NodeSight players, and take theirs (Share.lua)
 }
 local db = defaults -- NodeSightDB once it's loaded
 ns.db = db -- shared with the other files
@@ -291,7 +293,7 @@ NodeSightAPI = {
 local function LoadSettings()
     NodeSightDB = NodeSightDB or {}
     local SHARED = { learned = true, questObjects = true, saved = true, applied = true, rareNames = true, report = true,
-        nodes = true, collectTold = true }
+        nodes = true, received = true, collectTold = true }
     if type(NodeSightCharDB) ~= "table" then
         NodeSightCharDB = { own = true }
         for key, value in pairs(NodeSightDB) do
@@ -377,7 +379,7 @@ events:SetScript("OnEvent", function(_, event, arg1)
             events:UnregisterEvent("ADDON_LOADED")
             -- After an update, a /reload only loads the files the old .toc listed:
             -- stay off until the game is restarted.
-            if not (ns.Plain and ns.Mute and ns.Setup and ns.ShowSparkleWindow and ns.ShowWhatsNew and ns.MinimapButton and ns.RegisterSettings and ns.Collect) then
+            if not (ns.Plain and ns.Mute and ns.Setup and ns.ShowSparkleWindow and ns.ShowWhatsNew and ns.MinimapButton and ns.RegisterSettings and ns.Collect and ns.UpdateShare) then
                 events:UnregisterAllEvents()
                 if ns.ShowNotice then
                     pcall(ns.ShowNotice, "NodeSight needs a game restart", "NodeSight was updated while the game was running, "

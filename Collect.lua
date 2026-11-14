@@ -1,8 +1,9 @@
 -- Collecting: where you gathered a herb or ore is remembered, and marked on the world
--- map. Nothing is sent to anyone or read from other players.
+-- map. Share.lua passes the places on to other players, if that is turned on.
 --
--- Saved account-wide in NodeSightDB.nodes: per map ID, per node (its English name in
--- lower case, ns.NodeKey), a list of places. A place is one number: x * 10000 + y,
+-- Saved account-wide in NodeSightDB.nodes (your own) and NodeSightDB.received (from other
+-- players): per map ID, per node (its English name in lower case, ns.NodeKey), a list of
+-- places. A place is one number: x * 10000 + y,
 -- with x and y in thousandths of the map (0 to 1000). A node gathered again at a
 -- place already known adds nothing, so the list stops growing once a zone's spawn
 -- points are known.
@@ -26,20 +27,22 @@ local function Say(text)
     DEFAULT_CHAT_FRAME:AddMessage(NORMAL_FONT_COLOR:WrapTextInColorCode("NodeSight") .. ": " .. text)
 end
 
--- The saved places (NodeSightDB.nodes), made on first use. Anything else saved there is dropped.
-local function Nodes()
-    if type(NodeSightDB.nodes) ~= "table" then NodeSightDB.nodes = {} end
-    return NodeSightDB.nodes
+-- The saved places, made on first use: your own (NodeSightDB.nodes) or the ones received
+-- from other players (NodeSightDB.received). Anything else saved there is dropped.
+local function Nodes(received)
+    local key = received and "received" or "nodes"
+    if type(NodeSightDB[key]) ~= "table" then NodeSightDB[key] = {} end
+    return NodeSightDB[key]
 end
 
 local function Unpack(place)
     return floor(place / PACK), place % PACK
 end
 
--- How many places are saved.
-local function Count()
+-- How many places are saved: your own, or the received ones.
+local function Count(received)
     local count = 0
-    for _, map in pairs(Nodes()) do
+    for _, map in pairs(Nodes(received)) do
         if type(map) == "table" then
             for _, places in pairs(map) do
                 if type(places) == "table" then count = count + #places end
@@ -47,6 +50,17 @@ local function Count()
         end
     end
     return count
+end
+
+-- Is a node known at a place, in one of the two lists?
+local function Known(nodes, key, map, x, y)
+    local places = type(nodes[map]) == "table" and nodes[map][key]
+    if type(places) ~= "table" then return false end
+    for _, place in ipairs(places) do
+        local px, py = Unpack(place)
+        if abs(px - x) <= SAME and abs(py - y) <= SAME then return true end
+    end
+    return false
 end
 
 -- Where you stand: the map's ID and x, y in units; nil where the game gives no place
@@ -63,16 +77,15 @@ local function PlayerPlace()
     return map, floor(x * UNITS + 0.5), floor(y * UNITS + 0.5)
 end
 
--- Remembers a node at a place; true if it was new.
-local function Remember(key, map, x, y)
-    local nodes = Nodes()
+-- Remembers a node at a place (received: one another player sent); true if it was new.
+-- A received place you already have yourself, or already received, adds nothing.
+local function Remember(key, map, x, y, received)
+    if Known(Nodes(), key, map, x, y) then return false end
+    if received and Known(Nodes(true), key, map, x, y) then return false end
+    local nodes = Nodes(received)
     if type(nodes[map]) ~= "table" then nodes[map] = {} end
     if type(nodes[map][key]) ~= "table" then nodes[map][key] = {} end
     local places = nodes[map][key]
-    for _, place in ipairs(places) do
-        local px, py = Unpack(place)
-        if abs(px - x) <= SAME and abs(py - y) <= SAME then return false end
-    end
     places[#places + 1] = x * PACK + y
     return true
 end
@@ -104,11 +117,14 @@ local function Gathered()
     if not found or GetTime() - found.at > LOOT_WAIT or not ObjectLoot() then return end
     if not Remember(found.key, found.map, found.x, found.y) then return end
     ns.RefreshNodePins()
+    if ns.ShareNew then ns.ShareNew(found.map, found.key, found.x * PACK + found.y) end
     -- The first one ever says what just happened, and where to turn it off.
     if not NodeSightDB.collectTold then
         NodeSightDB.collectTold = true
         Say("I'll remember where you gather herbs and ore, and mark the places on your world map. "
-            .. "Nothing is shared. You can turn it off in NodeSight's settings, under Collecting.")
+            .. (ns.db.share and "The places (nothing else) are shared with other NodeSight players, and theirs come to you. "
+                or "Nothing is shared. ")
+            .. "You can turn both off in NodeSight's settings, under Collecting.")
     end
 end
 
@@ -142,6 +158,7 @@ local function UpdateCollect()
         watch:RegisterEvent("LOOT_READY")
     end
     ns.RefreshNodePins()
+    if ns.UpdateShare then ns.UpdateShare() end
 end
 
 ---------------------------------------------------------------------------
@@ -153,6 +170,7 @@ end
 local ICONS = { herbs = "Interface\\Icons\\INV_Misc_Flower_02", ore = "Interface\\Icons\\INV_Ore_Copper_01" }
 local PIN_SIZE = 12
 local PIN_LEVEL = 100 -- above the canvas, if the map gives no pin level of its own
+local RECEIVED_ALPHA = 0.7 -- a place another player sent
 
 local pins, used = {}, 0 -- the icons made so far, and how many of them show
 local hooked = false
@@ -176,6 +194,7 @@ end
 local function PinEnter(pin)
     GameTooltip:SetOwner(pin, "ANCHOR_RIGHT")
     GameTooltip:SetText(DisplayName(pin.key))
+    if pin.received then GameTooltip:AddLine("From another player", GRAY_FONT_COLOR:GetRGB()) end
     GameTooltip:Show()
 end
 local function PinLeave() GameTooltip:Hide() end
@@ -217,21 +236,23 @@ local function Refresh()
     local canvas = Canvas()
     if canvas and WorldMapFrame:IsShown() and ns.db.collect and ns.db.collectMap then
         local map = WorldMapFrame:GetMapID()
-        local nodes = not issecretvalue(map) and map and Nodes()[map]
-        if type(nodes) == "table" then
-            local width, height = canvas:GetSize()
-            -- The canvas grows as the map zooms in: the pins keep their size on screen.
-            local scale = canvas:GetScale()
-            scale = scale and scale > 0 and 1 / scale or 1
-            local level = PinLevel(canvas)
-            for key, places in pairs(nodes) do
+        local width, height = canvas:GetSize()
+        -- The canvas grows as the map zooms in: the pins keep their size on screen.
+        local scale = canvas:GetScale()
+        scale = scale and scale > 0 and 1 / scale or 1
+        local level = PinLevel(canvas)
+        -- Your own places, then the received ones (a little see-through).
+        for pass = 1, 2 do
+            local nodes = not issecretvalue(map) and map and Nodes(pass == 2)[map]
+            for key, places in pairs(type(nodes) == "table" and nodes or {}) do
                 local icon = ICONS[ns.NodeKind(key)]
                 if icon and type(places) == "table" then
                     for _, place in ipairs(places) do
                         local x, y = Unpack(place)
                         local pin = Pin(canvas)
-                        pin.key = key
+                        pin.key, pin.received = key, pass == 2
                         pin.icon:SetTexture(icon)
+                        pin:SetAlpha(pass == 2 and RECEIVED_ALPHA or 1)
                         pin:SetScale(scale)
                         pin:SetFrameLevel(level)
                         pin:ClearAllPoints()
@@ -279,13 +300,19 @@ function ns.Collect()
     UpdateCollect()
 end
 
--- Forgets every saved place; returns how many there were.
-function ns.ForgetNodes()
-    local count = Count()
-    NodeSightDB.nodes = {}
+-- Forgets every saved place (received: only the ones from other players); returns how
+-- many there were.
+function ns.ForgetNodes(received)
+    local count = Count(true)
+    NodeSightDB.received = {}
+    if not received then
+        count = count + Count()
+        NodeSightDB.nodes = {}
+    end
     ns.RefreshNodePins()
     return count
 end
 
 -- What the other files use of this one.
 ns.UpdateCollect, ns.NodeCount, ns.CollectSay = UpdateCollect, Count, Say
+ns.Nodes, ns.RememberNode, ns.NODE_PACK, ns.NODE_UNITS = Nodes, Remember, PACK, UNITS

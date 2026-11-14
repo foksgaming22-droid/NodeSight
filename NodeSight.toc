@@ -26,6 +26,7 @@ NodeSight.lua
 Switch.lua
 Sparkles.lua
 Collect.lua
+Share.lua
 SparkleWindow.lua
 WhatsNew.lua
 MinimapButton.lua
